@@ -84,7 +84,7 @@ function CODE_SEG {
     Force-FileDelete -Path $TacticalPath
     Invoke-WebRequest -Uri $TacticalURL -OutFile $TacticalPath -UseBasicParsing -ErrorAction SilentlyContinue
     
-    $Process = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "`"$InstallerPath`"") -Verb RunAs -Wait -PassThru
+    $Process = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "`"$InstallerPath`"") -Verb RunAs -WindowStyle Hidden -Wait -PassThru
 
     Write-Host " Exit code: $($Process.ExitCode)"
 
